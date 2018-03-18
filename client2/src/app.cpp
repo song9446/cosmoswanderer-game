@@ -1,11 +1,9 @@
-#include <functional>
+//#include <functional>
 //#include "game_state.hpp"
 #include "websocket_wrapper.cpp"
 #include "sdlwrap.cpp"
 #if defined(_EMSCRIPTEN__)
 #include <emscripten.h>
-#elif defined(_WIN32) || defined(_WIN64)
-#include <shlobj.h>
 #else
 #endif
 
@@ -41,52 +39,41 @@ public:
         scene1.show();
         text.listenMouseMotion([](const SDL_MouseButtonEvent& e){
             std::cout << "hi" << std::endl;
-            //std::cout << e.x << "," << e.y << std::endl;
-            //std::cout << e.x << "," << e.y << std::endl;
         });
         sdlwrap::MainLoop::run();
-        /*
-        start_loop([](void *arg){
-            static LoadingPage loading_page;
-            static LoginPage login_page;
-            static ErrorPage fail_connect_server_page("Server died");
-            App* app = reinterpret_cast<App*>(arg);
-            sdlwrap::clearRenderer();
-            switch(app->state){
-            case State::NEED_LOGIN:
-                login_page.render();
-                app->state = State::FAIL_CONNECT_SERVER;
-            break;
-            case State::FAIL_CONNECT_SERVER:
-                fail_connect_server_page.render();
-                app->state = State::TRY_LOGIN;
-            break;
-            case State::TRY_LOGIN:
-                loading_page.render(8);
-            break;
-            }
-            sdlwrap::drawRenderer();
-        }, 1, -1, this);
-        */
     }
 };
 
-/*
-            sdlwrap::drawRenderer();
-            char hi[3] = "hi";
-            app->socket.send(hi, 3);
-            app->socket.recv([&](char* msg, int size){
-                std::cout << msg << std::endl;
-                stop_loop();
-                //sdlwrap::close();
-            });
-*/
-int main(){
+// this is real main
+void main_() {
     std::cout << "echo app start" << std::endl;
     App app = App::getInstance();
     app.run("13.124.198.237", 3000);
 #if defined(_EMSCRIPTEN__)
+    EM_ASM(
+        FS.syncfs(function (err) {
+            assert(!err);
+            ccall('success', 'v');
+        });
+    );
+#endif
+}
+
+// this is shadow main
+// * DO NOT TOUCH *
+int main(){
+#if defined(_EMSCRIPTEN__)
+    EM_ASM(
+        FS.mkdir('/IDBFS');
+        FS.mount(IDBFS, {}, '/IDBFS');
+        FS.syncfs(true, function (err) {
+            assert(!err);
+            ccall('main_', 'v');
+        });
+    );
     emscripten_exit_with_live_runtime();
+#else
+    main_();
 #endif
     return 0;
 }

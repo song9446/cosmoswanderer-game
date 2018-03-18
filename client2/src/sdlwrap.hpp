@@ -5,6 +5,12 @@
 #include <fstream>
 namespace sdlwrap{
 
+struct UserDataSaver {
+    static const char* user_directory_path;
+    static int save(const char* relative_path, void* data, size_t size); 
+    static int load(const char* relative_path, void* data, size_t size); 
+};
+
 struct Font{
     static constexpr const char* DEFAULT_TTF_PATH = "asset/font/ttf/NanumBarunGothic.ttf";
     template<char... path, int size>
@@ -140,18 +146,10 @@ public:
         for(auto& c: components)
             c->handleMouseButtonUp(e);
     }
-/*
-    template<int T>
-    void addListener<Event::ACTIVE>(const std::function<void (Scene& from)>& handler);
-    template<int T>
-    void addListener<Event::INACTIVE>(const std::function<void (Scene& to)>& handler);
-*/
+    void add(Component& c);
+
     bool operator==(const Scene& rhs) const;
 
-    void add(Component& c);
-    //Component& add(Component* component){ components.push_back(component); return *component;}
-    //Component& add(Component& component){ components.push_back(&component); return component; }
-    //friend void Window::render();
     friend class Window;
     friend Component::Component(Scene&);
 };
@@ -170,31 +168,6 @@ public:
     void render();
 };
 
-/*
-typedef const std::function<void (void*)> Collable;
-bool looping = true;
-void stop_loop(){
-    #ifdef __EMSCRIPTEN__
-    emscripten_cancel_main_loop();
-    #else
-    looping = false;
-    #endif
-}
-template<typename T>
-void start_loop(T func, int fps, int simulate_infinite_loop, void* arg){
-    #ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop_arg(func, arg, fps, simulate_infinite_loop);
-    #else
-    auto now = std::chrono::system_clock::now();
-    std::chrono::time_point<std::chrono::system_clock> t = std::chrono::system_clock::now();
-    while(looping){
-        t += std::chrono::milliseconds(1000/fps);
-        func(arg);
-        std::this_thread::sleep_until(t);
-    }
-    #endif
-}
-*/
 class MainLoop {
     static bool looping;
 public:

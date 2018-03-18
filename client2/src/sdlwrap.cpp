@@ -1,45 +1,13 @@
 #include "sdlwrap.hpp"
 #include <stdio.h>
-
-const char* UserDirectoryName = "CosmosWanderer";
+#include <fstream>
 #if defined(_EMSCRIPTEN__)
 #include <emscripten.h>
 #elif defined(_WIN32) || defined(_WIN64)
-  EM_ASM(
-    FS.mkdir('/ls');
-    FS.mount(IDBFS, {}, '/ls');
-    
-    // sync from persisted state into memory and then
-    // run the 'test' function
-    FS.syncfs(true, function (err) {
-      assert(!err);
-      ccall('test', 'v');
-    });
-  );
-/*
-void func() {
-  ..
-  EM_ASM({
-    FS.syncfs(.., function(err) {
-      Module._continue();
-    });
-  });
-  // might want to pause the main loop here, if one is running
-}
-
-extern "C" {
-void EMSCRIPTEN_KEEPALIVE continue() {
-  // data is now here, continue and use it
-  // can resume main loop, if you are using one
-}
-*/
 #include <shlobj.h>
-TCHAR szFolderPath[MAX_PATH];
-if (!SHGetSpecialFolderPath(NULL, szFolderPath, CSIDL_APPDATA, FALSE)) {
-    // Uh-oh! An error occurred; handle it.
-}
 #else
-"~/.config/"
+#include <chrono>
+#include <thread>
 #endif
 
 namespace sdlwrap {
@@ -51,6 +19,50 @@ namespace sdlwrap {
         fflush(stdout);
     }
 #define error(...) __error(__FILE__, __LINE__, __VA_ARGS__)
+
+#if defined(_EMSCRIPTEN__)
+    // idb must be mounted on /IDBFS 
+    // It is happened on shadow main(see the main function)
+    const char* UserDataSaver::user_directory_path = "/IDBFS/";
+#elif defined(_WIN32) || defined(_WIN64)
+    TCHAR szFolderPath[256];
+    if (!SHGetSpecialFolderPath(NULL, szFolderPath, CSIDL_APPDATA, FALSE)) 
+        error("%s", "cannot get Windows User data directory");
+    const char* UserDataSaver::user_directory_path = szFolderPath;
+#else
+    const char* UserDataSaver::user_directory_path = "~/.config/";
+#endif
+    int UserDataSaver::save(const char* relative_path, void* data, size_t size){ 
+        std::string path = user_directory_path;
+        path += relative_path;
+        FILE* f = fopen(path.c_str(), "w");
+        if(f == NULL){
+            error("file open at %s failed", path.c_str()); 
+            return -1;
+        }
+        if(size != fwrite(data, 1, size, f)){
+            error("file write at %s failed", path.c_str()); 
+            fclose(f);
+            return -2;
+        }
+        fclose(f);
+        return 0;
+    }
+    int UserDataSaver::load(const char* relative_path, void* data, size_t size){ 
+        std::string path = user_directory_path;
+        path += relative_path;
+        FILE* f = fopen(path.c_str(), "w");
+        if(f == NULL){
+            error("file open at %s failed", path.c_str()); 
+            return -1;
+        }
+        if(size != fread(data, 1, size, f)){
+            error("file read at %s failed", path.c_str()); 
+            return -2;
+        }
+        fclose(f);
+        return 0;
+    }
 
     
     template<int size>
