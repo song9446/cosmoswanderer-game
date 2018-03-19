@@ -1,5 +1,6 @@
 //#include <functional>
 //#include "game_state.hpp"
+//#define SDL_HINT_IME_INTERNAL_EDITING "1"
 #include "websocket_wrapper.cpp"
 #include "sdlwrap.cpp"
 #if defined(_EMSCRIPTEN__)
@@ -68,11 +69,11 @@ public:
         #endif
         login_button->listenKeyDown([](const SDL_KeyboardEvent& e){
             if(e.keysym.sym == SDLK_RETURN){
-                std::cout << "login..?" << std::endl;
+                printf("%s\n", "login..?");
             }
         });
         login_button->listenMouseDown([](const SDL_MouseButtonEvent& e){
-            std::cout << "login..?" << std::endl;
+            printf("%s\n", "login..?");
         });
         id_input->focusIn();
         return scene;
@@ -81,7 +82,7 @@ public:
 
 // this is real main
 void main_() {
-    std::cout << "echo app start" << std::endl;
+    printf("%s\n", "game start");
     App app = App::getInstance();
     app.run("13.124.198.237", 3000);
 #if defined(_EMSCRIPTEN__)

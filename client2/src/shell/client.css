@@ -34,6 +34,11 @@
   animation: rotation 2.0s infinite linear 0.25s;
   opacity: 0;
 }
+#canvas {
+    border: 0px none;
+    background-color: black;
+    color: transparent;
+}
 @keyframes rotation {
   from {
     opacity: 1;

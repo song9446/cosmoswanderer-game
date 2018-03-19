@@ -110,6 +110,8 @@ public:
     ~Window();
     void set(Scene* scene); 
     void set(Scene& scene); 
+    int getWidth(){ return width; }
+    int getHeight(){ return height; }
     SDL_Renderer* getRenderer();
     virtual void handleMouseMotion(const SDL_MouseButtonEvent& e);
     virtual void handleMouseButtonDown(const SDL_MouseButtonEvent& e);

@@ -3,39 +3,77 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta id='viewport' name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, target-densitydpi=device-dpi" />
+    <script>
+    // Scale the viewport for mobile users
+      /*let w = 800, h = 600;
+      let ww = window.screen.width;
+      let mw = 800; // min width of site
+      let wh = window.screen.width;
+      let mw = 800; // min width of site
+      var ratio =  ww / mw; //calculate ratio
+      var viewport_meta_tag = document.getElementById('viewport');
+      if( ww < mw){ //smaller than minimum size
+        viewport_meta_tag.setAttribute('content', 'initial-scale=' + ratio + ', maximum-scale=' + ratio + ', minimum-scale=' + ratio + ', user-scalable=no, width=' + mw);
+      }
+      else { //regular size
+        viewport_meta_tag.setAttribute('content', 'initial-scale=1.0, maximum-scale=1, minimum-scale=1.0, user-scalable=yes, width=' + ww);
+      } 
+        */
+    </script>
     <title></title>
     <link rel="stylesheet" type="text/css" href="client.css">
+    <link rel="manifest" href="manifest.json">
   </head>
   <body>
     <div class='container'>
         <div id='loader' class='loader'>
             <div class='spinner'></div>
-            <progress value="0" max="1" id="progress" hidden=1></progress>  
+            <br/>
+            <div value="0" max="0" id="progress" hidden=1></div> 
         </div>
-        <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+        <canvas id="canvas" oncontextmenu="event.preventDefault()" contenteditable="true" onclick="event.preventDefault()"></canvas>
     </div>
-    <!--<div class="emscripten">
-      <input type="checkbox" id="resize">Resize canvas
-      <input type="checkbox" id="pointerLock" checked>Lock/hide mouse pointer
-      &nbsp;&nbsp;&nbsp;
-      <input type="button" value="Fullscreen" onclick="Module.requestFullscreen(document.getElementById('pointerLock').checked, 
-                                                                                document.getElementById('resize').checked)">
-    </div>-->
     <script type='text/javascript'>
+      document.getElementById('canvas').addEventListener("webglcontextlost", function(e) { alert('Webgl context losted'); e.preventDefault(); }, false); 
       var progressElement = document.getElementById('progress');
       var Module = {
+        preRun: [],
+        postRun: [
+            ()=>{
+                let viewport_fix = ()=>{    
+                    let ratio = Math.min(window.screen.width*1.0 / Module.canvas.width, window.screen.height*1.0 / Module.canvas.height);
+                    if(ratio > 0) document.getElementById('viewport').setAttribute('content', `initial-scale=${ratio}, maximum-scale=${ratio}, minimum-scale=${ratio}, user-scalable=no, width=${Module.canvas.width}, height=${Module.canvas.height}`);
+                    else          document.getElementById('viewport').setAttribute('content', `initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, width=${window.screen.width}, height=${window.screen.height}`);
+                };
+                window.onresize = viewport_fix;
+                viewport_fix();
+            },
+        ],
         print(text){ console.log(text); },
         printErr(text) { console.error(text); },
         canvas: document.getElementById("canvas"), 
+        openOnScreenKeyboard(){
+           // this.canvas.contentEditable = "true";
+            this.canvas.focus();
+        },
+        shutOnScreenKeyboard(){
+            this.canvas.blur();
+            //this.canvas.contentEditable = "false";
+        },
         monitorRunDependencies(left){ 
+            left = parseInt(left);
             let loader = document.getElementById('loader'), 
                 progress = document.getElementById('progress');
             if(left == 0) loader.style.display = 'none';
             else loader.style.display = 'flex';
-            progress.value = progress.max - left;
-            progress.max = Math.max(left, progress.max);
+            progress.max = Math.max(left, progress.max || 0);
+            progress.value = progress.max - left || 0;
             this.print(progress.value + "/" + progress.max);
         }
+      };
+      Module.canvas.onclick = ()=>{
+            Module.canvas.focus();
       };
       window.onerror = ()=>{
         console.error("-- error happening here --");

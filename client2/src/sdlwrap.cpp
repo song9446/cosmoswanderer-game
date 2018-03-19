@@ -6,8 +6,6 @@
 #elif defined(_WIN32) || defined(_WIN64)
 #include <shlobj.h>
 #else
-#include <chrono>
-#include <thread>
 #endif
 
 namespace sdlwrap {
@@ -257,9 +255,15 @@ namespace sdlwrap {
         set(x, y);
     }
     void Input::focusIn(){ 
+        EM_ASM(
+            Module.openOnScreenKeyboard();
+        );
         focused = this; 
     };
     void Input::focusOut(){ 
+        EM_ASM(
+            Module.shutOnScreenKeyboard();
+        );
         focused = NULL; 
     };
     void Input::handleMouseButtonDown(const SDL_MouseButtonEvent& e){
@@ -282,6 +286,9 @@ namespace sdlwrap {
                 i-=1;
             setCursor(i);
             if(mouseButtonDownHandler) mouseButtonDownHandler(e); 
+        }
+        else if(focused == this){
+            focusOut();
         }
     }
     void Input::setCursor(int index){
@@ -396,14 +403,11 @@ namespace sdlwrap {
     }
 
     void MainLoop::run(int fps){
+        SDL_StartTextInput();
         auto loop_func = [](void* args){ 
             static SDL_Event e;
-            static std::chrono::time_point<std::chrono::system_clock> t = std::chrono::system_clock::now();
-            if(std::chrono::system_clock::now() >= t){
-                for(Window*& w : Window::container) w->render(); 
-                t += std::chrono::milliseconds(1000/60);
-            }
-            SDL_StartTextInput();
+            static SDL_MouseButtonEvent fake_mve; 
+            static Uint32 last_time = SDL_GetTicks();
             while(SDL_PollEvent(&e)) {
                 switch(e.type){
                 case SDL_QUIT: 
@@ -428,19 +432,45 @@ namespace sdlwrap {
                     for(Window*& w : Window::container) w->handleTextInput(e.text); 
                     break;
                 case SDL_TEXTEDITING:
-                    std::cout << e.edit.text << std::endl;
+                    printf("%s\n", e.edit.text);
+                    break;
+                case SDL_FINGERDOWN:
+                    for(Window*& w : Window::container){ 
+                        fake_mve.x = e.tfinger.x * w->getWidth();
+                        fake_mve.y = e.tfinger.y * w->getHeight();
+                        w->handleMouseButtonDown(fake_mve); 
+                    }
+                    break;
+                case SDL_FINGERUP:
+                    for(Window*& w : Window::container){ 
+                        fake_mve.x = e.tfinger.x * w->getWidth();
+                        fake_mve.y = e.tfinger.y * w->getHeight();
+                        w->handleMouseButtonUp(fake_mve); 
+                    }
+                    break;
+                case SDL_FINGERMOTION:
+                    SDL_MouseButtonEvent _e;
+                    for(Window*& w : Window::container){ 
+                        _e.x = e.tfinger.x * w->getWidth();
+                        _e.y = e.tfinger.y * w->getHeight();
+                        w->handleMouseMotion(_e); 
+                    }
                     break;
                 }
+            }
+            while(SDL_GetTicks() - last_time >= 1000/60){
+                for(Window*& w : Window::container) w->render(); 
+                last_time += 1000/60;
             }
         };
 #ifdef __EMSCRIPTEN__
         emscripten_set_main_loop_arg(loop_func, NULL, fps, -1);
 #else
-        std::chrono::time_point<std::chrono::system_clock> t = std::chrono::system_clock::now();
+        UInt32 last_time = SDL_GetTicks(); 
         while(looping){
-            t += std::chrono::milliseconds(1000/fps);
             loop_func(NULL);
-            std::this_thread::sleep_until(t);
+            if(SDL_GetTicks() - last_time < 1000/fps)
+                SDL_Delay(1000/fps - SDL_GetTicks());
         }
 #endif
     }

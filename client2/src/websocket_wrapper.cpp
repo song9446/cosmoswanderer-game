@@ -1,4 +1,3 @@
-#include <iostream>
 #include <functional>
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -19,14 +18,13 @@ public:
     CODE connect(const char* addr, int port){
         IPaddress ipAddress;
         if(-1 == SDLNet_ResolveHost(&ipAddress, addr, port)){
-            std::cout << "Failed to open port : " << port << std::endl;
+            printf("Failed to open port : %d\n", port);
             return CODE::FAIL_OPEN_PORT;
         }
         socket = SDLNet_TCP_Open(&ipAddress);
         if(socket == nullptr){
-            std::cout << "Failed to connect to port : " << port
-                <<" \n\tError : " << SDLNet_GetError()
-                << std::endl;
+            printf("Failed to connect to port : %d\n", port);
+            printf("Error: %s\n", SDLNet_GetError());
             return CODE::FAIL_CONNECT;
         }
         buf.resize(INITIAL_BUF_SIZE);
