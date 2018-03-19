@@ -10,6 +10,7 @@ SOURCES = src/app.cpp
 
 linux: $(SOURCES)
 	mkdir -p $(LINUX_OUT_ROOT)
+	cp -rf asset $(LINUX_OUT_ROOT)/
 	g++ $(CPP_OPENSSL_OSX) -std=c++14 -O3 $(SOURCES) -Isrc -o $(LINUX_OUT_ROOT)/client -L. -Lsrc -lpthread -lGL -lSDL2 -lSDL2_net -lSDL2_image -lSDL2_ttf -lSDL2_mixer
 
 web: $(SOURCES)

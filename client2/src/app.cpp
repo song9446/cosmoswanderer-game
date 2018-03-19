@@ -7,10 +7,18 @@
 #else
 #endif
 
+void ugly_handle_socket_success(int fd, void* ud){
+    auto state = reinterpret_cast<sdlwrap::Text*>(ud);
+    state->set("server is alive", sdlwrap::Font::get<12>(), SDL_Color{0, 255, 0, 255});
+}
+void ugly_handle_socket_fail(int fd, void* ud){
+    auto state = reinterpret_cast<sdlwrap::Text*>(ud);
+    state->set("server may died", sdlwrap::Font::get<12>(), SDL_Color{255, 0, 0, 255});
+}
 
 class App{
 private:
-    enum class State {
+    enum class State: int {
         NEED_LOGIN, FAIL_CONNECT_SERVER, TRY_LOGIN, RECEIVING_LAST_STATE, RUNNING
     };
     static constexpr const char* APP_NAME = "CosmosWanderer";
@@ -18,7 +26,7 @@ private:
     //game_state::PartialMap* map = NULL;
     WebsocketWrapper socket;
     const char* title="CosmosWanderer";
-    int width=640, height=480;
+    int width=800, height=600;
 public:
     static App& getInstance() {
         static App instance;
@@ -26,21 +34,48 @@ public:
     }
     void loadConfig(){
     }
+    void setState(State s){
+        state = s;
+    }
     void run(const char* server_ip, int port){
         if(socket.connect(server_ip, port) != WebsocketWrapper::CODE::SUCCESS)
             state = State::FAIL_CONNECT_SERVER;
+
         sdlwrap::Window window(title, width, height);
-        sdlwrap::Scene scene1(window);
-        sdlwrap::Text text(scene1, 10, 10, "hi");
-        sdlwrap::Text text2(scene1, 22, 20, "oh oh..");
-        sdlwrap::Scene scene2(window);
-        sdlwrap::Text text3(scene1, 10, 10, "hiyo");
-        sdlwrap::Text text4(scene1, 22, 20, "no no..");
-        scene1.show();
-        text.listenMouseMotion([](const SDL_MouseButtonEvent& e){
-            std::cout << "hi" << std::endl;
-        });
+        sdlwrap::Scene login_scene = loginScene(window);
+
         sdlwrap::MainLoop::run();
+    }
+    sdlwrap::Scene& loginScene(sdlwrap::Window& window){
+        static sdlwrap::Scene scene(window);
+        auto big_font = sdlwrap::Font::get<24>();
+        auto normal_font = sdlwrap::Font::get<16>();
+        auto color = SDL_Color{255, 255, 255, 255},
+             yellow = SDL_Color{255, 255, 0, 255};
+        auto state_label    = scene.add<sdlwrap::Text>(       0,          0,     "server connecting..",                normal_font,    yellow, sdlwrap::Align::TOP, sdlwrap::Align::LEFT);
+        auto title    = scene.add<sdlwrap::Text>(       width/2,    height/2-90, "Cosmos Wanderer", big_font,       color, sdlwrap::Align::MIDDLE, sdlwrap::Align::CENTER);
+        auto id_label = scene.add<sdlwrap::Text>(       width/2-80, height/2-30, "ID",              normal_font,    color, sdlwrap::Align::MIDDLE, sdlwrap::Align::LEFT);
+        auto id_input = scene.add<sdlwrap::Input>(      width/2+80, height/2-30, 120,               normal_font,    color, sdlwrap::Align::MIDDLE, sdlwrap::Align::RIGHT);
+        auto pw_label = scene.add<sdlwrap::Text>(       width/2-80, height/2+10, "PW",              normal_font,    color, sdlwrap::Align::MIDDLE, sdlwrap::Align::LEFT);
+        auto pw_input = scene.add<sdlwrap::Input>(      width/2+80, height/2+10, 120,               normal_font,    color, sdlwrap::Align::MIDDLE, sdlwrap::Align::RIGHT, '*');
+        auto login_button = scene.add<sdlwrap::Button>( width/2, height/2+50, 60,   20, "LOGIN", normal_font,    color, sdlwrap::Align::MIDDLE, sdlwrap::Align::CENTER);
+        #if defined(_EMSCRIPTEN__)
+        emscripten_set_socket_open_callback(state, ugly_handle_socket_state);
+        emscripten_set_socket_error_callback(state, ugly_handle_socket_state);
+        #else
+        if(state == State::FAIL_CONNECT_SERVER) ugly_handle_socket_fail(-1, state_label);
+        else ugly_handle_socket_success(-1, state_label);
+        #endif
+        login_button->listenKeyDown([](const SDL_KeyboardEvent& e){
+            if(e.keysym.sym == SDLK_RETURN){
+                std::cout << "login..?" << std::endl;
+            }
+        });
+        login_button->listenMouseDown([](const SDL_MouseButtonEvent& e){
+            std::cout << "login..?" << std::endl;
+        });
+        id_input->focusIn();
+        return scene;
     }
 };
 
