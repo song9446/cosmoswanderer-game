@@ -4,7 +4,7 @@
 #if defined(_EMSCRIPTEN__)
 #include <emscripten.h>
 #elif defined(_WIN32) || defined(_WIN64)
-#include <shlobj.h>
+#include <Shlobj.h>
 #else
 #endif
 
@@ -18,18 +18,22 @@ namespace sdlwrap {
     }
 #define error(...) __error(__FILE__, __LINE__, __VA_ARGS__)
 
+char* getUserDirectoryPath(){
 #if defined(_EMSCRIPTEN__)
+    return "/IDBFS/";
+#elif defined(_WIN32) || defined(_WIN64)
+    #pragma comment(lib, "Shell32")
+    static TCHAR szFolderPath[MAX_PATH];
+    if(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, 0, szFolderPath) != S_OK) 
+        error("%s", "cannot get Windows User data directory");
+    return szFolderPath;
+#else
+    return "~/.config/";
     // idb must be mounted on /IDBFS 
     // It is happened on shadow main(see the main function)
-    const char* UserDataSaver::user_directory_path = "/IDBFS/";
-#elif defined(_WIN32) || defined(_WIN64)
-    TCHAR szFolderPath[256];
-    if (!SHGetSpecialFolderPath(NULL, szFolderPath, CSIDL_APPDATA, FALSE)) 
-        error("%s", "cannot get Windows User data directory");
-    const char* UserDataSaver::user_directory_path = szFolderPath;
-#else
-    const char* UserDataSaver::user_directory_path = "~/.config/";
 #endif
+}
+    const char* UserDataSaver::user_directory_path = getUserDirectoryPath();
     int UserDataSaver::save(const char* relative_path, void* data, size_t size){ 
         std::string path = user_directory_path;
         path += relative_path;
@@ -255,15 +259,19 @@ namespace sdlwrap {
         set(x, y);
     }
     void Input::focusIn(){ 
+#if defined(_EMSCRIPTEN__)
         EM_ASM(
             Module.openOnScreenKeyboard();
         );
+#endif
         focused = this; 
     };
     void Input::focusOut(){ 
+#if defined(_EMSCRIPTEN__)
         EM_ASM(
             Module.shutOnScreenKeyboard();
         );
+#endif
         focused = NULL; 
     };
     void Input::handleMouseButtonDown(const SDL_MouseButtonEvent& e){
@@ -466,7 +474,7 @@ namespace sdlwrap {
 #ifdef __EMSCRIPTEN__
         emscripten_set_main_loop_arg(loop_func, NULL, fps, -1);
 #else
-        UInt32 last_time = SDL_GetTicks(); 
+        uint32_t last_time = SDL_GetTicks(); 
         while(looping){
             loop_func(NULL);
             if(SDL_GetTicks() - last_time < 1000/fps)

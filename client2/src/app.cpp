@@ -45,7 +45,7 @@ public:
         sdlwrap::Window window(title, width, height);
         sdlwrap::Scene login_scene = loginScene(window);
 
-        sdlwrap::MainLoop::run();
+        sdlwrap::MainLoop::run(60);
     }
     sdlwrap::Scene& loginScene(sdlwrap::Window& window){
         static sdlwrap::Scene scene(window);
