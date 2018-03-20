@@ -1,0 +1,9 @@
+{
+    "name": "CosmosWanderer",
+    "schort_name": "CosmosWanderer",
+    "start_url": ".",
+    "display": "standalone", 
+    "description": "CosmosWanderer game",
+    "background_color": "black",
+    "orientation": "landscape" 
+}

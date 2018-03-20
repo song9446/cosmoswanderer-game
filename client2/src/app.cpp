@@ -3,18 +3,19 @@
 //#define SDL_HINT_IME_INTERNAL_EDITING "1"
 #include "websocket_wrapper.cpp"
 #include "sdlwrap.cpp"
-#if defined(_EMSCRIPTEN__)
+#if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
 #else
+#include <unistd.h>
 #endif
 
 void ugly_handle_socket_success(int fd, void* ud){
-    auto state = reinterpret_cast<sdlwrap::Text*>(ud);
+    sdlwrap::Text* state = reinterpret_cast<sdlwrap::Text*>(ud);
     state->set("server is alive", sdlwrap::Font::get<12>(), SDL_Color{0, 255, 0, 255});
 }
-void ugly_handle_socket_fail(int fd, void* ud){
-    auto state = reinterpret_cast<sdlwrap::Text*>(ud);
-    state->set("server may died", sdlwrap::Font::get<12>(), SDL_Color{255, 0, 0, 255});
+void ugly_handle_socket_fail(int fd, int t, const char* msg, void* ud){
+    sdlwrap::Text* state = reinterpret_cast<sdlwrap::Text*>(ud);
+    state->set((std::string("server may died: ")+ msg).c_str(), sdlwrap::Font::get<12>(), SDL_Color{255, 0, 0, 255});
 }
 
 class App{
@@ -53,18 +54,18 @@ public:
         auto normal_font = sdlwrap::Font::get<16>();
         auto color = SDL_Color{255, 255, 255, 255},
              yellow = SDL_Color{255, 255, 0, 255};
-        auto state_label    = scene.add<sdlwrap::Text>(       0,          0,     "server connecting..",                normal_font,    yellow, sdlwrap::Align::TOP, sdlwrap::Align::LEFT);
+        sdlwrap::Text* state_label    = scene.add<sdlwrap::Text>(       0,          0,     "server connecting..",                normal_font,    yellow, sdlwrap::Align::TOP, sdlwrap::Align::LEFT);
         auto title    = scene.add<sdlwrap::Text>(       width/2,    height/2-90, "Cosmos Wanderer", big_font,       color, sdlwrap::Align::MIDDLE, sdlwrap::Align::CENTER);
         auto id_label = scene.add<sdlwrap::Text>(       width/2-80, height/2-30, "ID",              normal_font,    color, sdlwrap::Align::MIDDLE, sdlwrap::Align::LEFT);
         auto id_input = scene.add<sdlwrap::Input>(      width/2+80, height/2-30, 120,               normal_font,    color, sdlwrap::Align::MIDDLE, sdlwrap::Align::RIGHT);
         auto pw_label = scene.add<sdlwrap::Text>(       width/2-80, height/2+10, "PW",              normal_font,    color, sdlwrap::Align::MIDDLE, sdlwrap::Align::LEFT);
         auto pw_input = scene.add<sdlwrap::Input>(      width/2+80, height/2+10, 120,               normal_font,    color, sdlwrap::Align::MIDDLE, sdlwrap::Align::RIGHT, '*');
         auto login_button = scene.add<sdlwrap::Button>( width/2, height/2+50, 60,   20, "LOGIN", normal_font,    color, sdlwrap::Align::MIDDLE, sdlwrap::Align::CENTER);
-        #if defined(_EMSCRIPTEN__)
-        emscripten_set_socket_open_callback(state, ugly_handle_socket_state);
-        emscripten_set_socket_error_callback(state, ugly_handle_socket_state);
+        #if defined(__EMSCRIPTEN__)
+        emscripten_set_socket_open_callback((void*)state_label, ugly_handle_socket_success);
+        emscripten_set_socket_error_callback((void*)state_label, ugly_handle_socket_fail);
         #else
-        if(state == State::FAIL_CONNECT_SERVER) ugly_handle_socket_fail(-1, state_label);
+        if(state == State::FAIL_CONNECT_SERVER) ugly_handle_socket_fail(-1, -1, "server may died", state_label);
         else ugly_handle_socket_success(-1, state_label);
         #endif
         login_button->listenKeyDown([](const SDL_KeyboardEvent& e){
@@ -81,24 +82,26 @@ public:
 };
 
 // this is real main
-void main_() {
+extern "C" {void main_() {
     printf("%s\n", "game start");
     App app = App::getInstance();
     app.run("13.124.198.237", 3000);
-#if defined(_EMSCRIPTEN__)
+#if defined(__EMSCRIPTEN__)
     EM_ASM(
         FS.syncfs(function (err) {
             assert(!err);
-            ccall('success', 'v');
+            //ccall('success', 'v');
         });
     );
 #endif
-}
+}}
 
 // this is shadow main
 // * DO NOT TOUCH *
-int main(){
-#if defined(_EMSCRIPTEN__)
+int main(int argc, char **argv){
+    printf("P: %s\n", SDL_GetPrefPath("My Company", "My Awesome SDL 2 Game"));
+    printf("P: %s\n", SDL_GetBasePath());
+#if defined(__EMSCRIPTEN__)
     EM_ASM(
         FS.mkdir('/IDBFS');
         FS.mount(IDBFS, {}, '/IDBFS');

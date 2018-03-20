@@ -1,10 +1,8 @@
 #include "sdlwrap.hpp"
 #include <stdio.h>
 #include <fstream>
-#if defined(_EMSCRIPTEN__)
+#if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
-#elif defined(_WIN32) || defined(_WIN64)
-#include <Shlobj.h>
 #else
 #endif
 
@@ -18,48 +16,44 @@ namespace sdlwrap {
     }
 #define error(...) __error(__FILE__, __LINE__, __VA_ARGS__)
 
-char* getUserDirectoryPath(){
-#if defined(_EMSCRIPTEN__)
-    return "/IDBFS/";
-#elif defined(_WIN32) || defined(_WIN64)
-    #pragma comment(lib, "Shell32")
-    static TCHAR szFolderPath[MAX_PATH];
-    if(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, 0, szFolderPath) != S_OK) 
-        error("%s", "cannot get Windows User data directory");
-    return szFolderPath;
-#else
-    return "~/.config/";
-    // idb must be mounted on /IDBFS 
-    // It is happened on shadow main(see the main function)
-#endif
-}
-    const char* UserDataSaver::user_directory_path = getUserDirectoryPath();
-    int UserDataSaver::save(const char* relative_path, void* data, size_t size){ 
-        std::string path = user_directory_path;
+    char* FileManager::base_path = SDL_GetBasePath();
+    char* FileManager::pref_path = NULL;
+    void FileManager::setPrefPath(const char* company_name, const char* app_name){
+        pref_path = SDL_GetPrefPath(company_name, app_name);
+    }
+    const char* FileManager::getPrefPath(){
+        return pref_path;
+    }
+    const char* FileManager::getBasePath(){
+        if(!base_path) base_path = SDL_GetBasePath();
+        return base_path;
+    }
+    int FileManager::save_pref(const char* relative_path, void* data, size_t size){ 
+        std::string path = pref_path;
         path += relative_path;
         FILE* f = fopen(path.c_str(), "w");
         if(f == NULL){
-            error("file open at %s failed", path.c_str()); 
+            error("file open at '%s' failed", path.c_str()); 
             return -1;
         }
         if(size != fwrite(data, 1, size, f)){
-            error("file write at %s failed", path.c_str()); 
+            error("file write at '%s' failed", path.c_str()); 
             fclose(f);
             return -2;
         }
         fclose(f);
         return 0;
     }
-    int UserDataSaver::load(const char* relative_path, void* data, size_t size){ 
-        std::string path = user_directory_path;
+    int FileManager::load_pref(const char* relative_path, void* data, size_t size){ 
+        std::string path = pref_path;
         path += relative_path;
         FILE* f = fopen(path.c_str(), "w");
         if(f == NULL){
-            error("file open at %s failed", path.c_str()); 
+            error("file open at '%s' failed", path.c_str()); 
             return -1;
         }
         if(size != fread(data, 1, size, f)){
-            error("file read at %s failed", path.c_str()); 
+            error("file read at '%s' failed", path.c_str()); 
             return -2;
         }
         fclose(f);
@@ -69,14 +63,14 @@ char* getUserDirectoryPath(){
     
     template<int size>
     TTF_Font*& Font::get(){
-        static TTF_Font* font = TTF_OpenFont(DEFAULT_TTF_PATH, size);
-        if(font == NULL) error("%s with %s", SDL_GetError(), DEFAULT_TTF_PATH);
+        static TTF_Font* font = TTF_OpenFont((std::string(FileManager::getBasePath()) + DEFAULT_TTF_PATH).c_str(), size);
+        if(font == NULL) error("%s with '%s'", SDL_GetError(), DEFAULT_TTF_PATH);
         return font;
     }
     template<char... path, int size>
     TTF_Font*& Font::get(){
-        static TTF_Font* font = TTF_OpenFont(path..., size);
-        if(font == NULL) error("%s with %s", SDL_GetError(), path...);
+        static TTF_Font* font = TTF_OpenFont((std::string(FileManager::getBasePath()) + std::string(path...)).c_str(), size);
+        if(font == NULL) error("%s with '%s'", SDL_GetError(), path...);
         return font;
     }
 
@@ -90,10 +84,10 @@ char* getUserDirectoryPath(){
     void Texture::load(const char* path){
         if(texture) free();
         SDL_Surface* loadedSurface = IMG_Load(path);
-        if(loadedSurface == NULL) error("%s with %s", IMG_GetError(), path);
+        if(loadedSurface == NULL) error("%s with '%s'", IMG_GetError(), path);
         SDL_SetColorKey(loadedSurface, SDL_TRUE, SDL_MapRGB(loadedSurface->format, 0, 0xFF, 0xFF));
         texture = SDL_CreateTextureFromSurface(renderer, loadedSurface);
-        if(texture == NULL) error("%s with %s", SDL_GetError(), path);
+        if(texture == NULL) error("%s with '%s'", SDL_GetError(), path);
         w = loadedSurface->w;
         h = loadedSurface->h;
         SDL_FreeSurface( loadedSurface );
@@ -101,9 +95,9 @@ char* getUserDirectoryPath(){
     void Texture::load(const char* text, TTF_Font* font, SDL_Color textColor){
         if(texture) free();
         SDL_Surface* loadedSurface = TTF_RenderUTF8_Blended(font, text, textColor);
-        if(loadedSurface == NULL) error("%s with %s", TTF_GetError(), text);
+        if(loadedSurface == NULL) error("%s with '%s'", TTF_GetError(), text);
         texture = SDL_CreateTextureFromSurface(renderer, loadedSurface);
-        if(texture == NULL) error("%s", SDL_GetError());
+        if(texture == NULL) error("texture of '%s' load fail: %s", text, SDL_GetError());
         w = loadedSurface->w;
         h = loadedSurface->h;
         SDL_FreeSurface(loadedSurface);
@@ -127,9 +121,10 @@ char* getUserDirectoryPath(){
         static bool not_yet = true;
         if(not_yet){
             not_yet = false;
-            if(SDL_Init(SDL_INIT_VIDEO) < 0) error("%s", SDL_GetError());
-            if(TTF_Init() < 0) error("%s", TTF_GetError());
+            if(SDL_Init(SDL_INIT_VIDEO) < 0) error("fail while init SDL: %s", SDL_GetError());
+            if(TTF_Init() < 0) error("fail while init TTF: %s", TTF_GetError());
             //if(IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) error("%s", IMG_GetError());
+            //printf("%s\n", "SDL_INITED");
         }
     }
     void Window::render(){
@@ -142,9 +137,9 @@ char* getUserDirectoryPath(){
     }
     Window::Window(const char* title, int x, int y, int w, int h, uint32_t flags): width(w), height(h){
         initSDL();
-        if(!(window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags))) error("%s", SDL_GetError());
-        if(!(renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED))) error("%s", SDL_GetError());
-        if(SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0) error("%s", SDL_GetError());
+        if(!(window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags))) error("fail while gen window '%s': %s", title, SDL_GetError());
+        if(!(renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED))) error("error while gen renderer of window of '%s': %s", title, SDL_GetError());
+        if(SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0) error("error while set render draw blend mode with window of '%s'", title, SDL_GetError());
         container.push_back(this);
     }
     Window::~Window(){
@@ -259,7 +254,7 @@ char* getUserDirectoryPath(){
         set(x, y);
     }
     void Input::focusIn(){ 
-#if defined(_EMSCRIPTEN__)
+#if defined(__EMSCRIPTEN__)
         EM_ASM(
             Module.openOnScreenKeyboard();
         );
@@ -267,7 +262,7 @@ char* getUserDirectoryPath(){
         focused = this; 
     };
     void Input::focusOut(){ 
-#if defined(_EMSCRIPTEN__)
+#if defined(__EMSCRIPTEN__)
         EM_ASM(
             Module.shutOnScreenKeyboard();
         );
@@ -472,13 +467,13 @@ char* getUserDirectoryPath(){
             }
         };
 #ifdef __EMSCRIPTEN__
-        emscripten_set_main_loop_arg(loop_func, NULL, fps, -1);
+        emscripten_set_main_loop_arg(loop_func, NULL, fps, true);
 #else
         uint32_t last_time = SDL_GetTicks(); 
         while(looping){
             loop_func(NULL);
             if(SDL_GetTicks() - last_time < 1000/fps)
-                SDL_Delay(1000/fps - SDL_GetTicks());
+                SDL_Delay(1000/fps - SDL_GetTicks() + last_time);
         }
 #endif
     }

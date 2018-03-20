@@ -9,10 +9,14 @@ enum class Align {
     CENTER, LEFT, RIGHT, TOP, MIDDLE, BOTTOM
 };
 
-struct UserDataSaver {
-    static const char* user_directory_path;
-    static int save(const char* relative_path, void* data, size_t size); 
-    static int load(const char* relative_path, void* data, size_t size); 
+struct FileManager {
+    static char* base_path;
+    static char* pref_path;
+    static void setPrefPath(const char* company_name, const char* app_name);
+    static const char* getPrefPath();
+    static const char* getBasePath();
+    static int save_pref(const char* relative_path, void* data, size_t size); 
+    static int load_pref(const char* relative_path, void* data, size_t size); 
 };
 
 struct Font{
