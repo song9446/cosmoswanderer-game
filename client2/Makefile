@@ -1,6 +1,6 @@
 CPP_OPENSSL_OSX = -L/usr/local/opt/openssl/lib -L/usr/local/lib -I/usr/local/opt/openssl/include -I/usr/local/include -I../server/src/game_state -Ithirparty/easywsclient -I/usr/include/SDL2
 CPP_OPENSSL_WIN32 = -march=x86-64 -Wall -LC:/MinGW/lib -I/usr/local/opt/openssl/include -I/usr/local/include -I../server/src/game_state -Ithirparty/easywsclient -IC:/MinGW/x86_64-w64-mingw32/include/SDL2 -LC:/MinGW/x86_64-w64-mingw32/lib 
-EMCC_ARG = -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 -s USE_SDL_NET=2 -s USE_SDL_IMAGE=2 -s DISABLE_EXCEPTION_CATCHING=0 -s ASSERTIONS=1 -std=c++14 -I../server/src/game_state -O3  --preload-file asset -s EXPORTED_FUNCTIONS='["_main_", "_main"]' -s EXTRA_EXPORTED_RUNTIME_METHODS='["ccall"]'
+EMCC_ARG = -Wall -s WASM=1 -s USE_SDL=2 -s USE_SDL_TTF=2 -s USE_SDL_NET=2 -s USE_SDL_IMAGE=2 -s DISABLE_EXCEPTION_CATCHING=0 -s ASSERTIONS=1 -std=c++14 -I../server/src/game_state -O3  --preload-file asset -s EXPORTED_FUNCTIONS='["_main_", "_main"]' -s EXTRA_EXPORTED_RUNTIME_METHODS='["ccall"]'
 
 OUT_ROOT = build
 WEB_OUT_ROOT = $(OUT_ROOT)/web

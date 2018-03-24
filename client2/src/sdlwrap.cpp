@@ -1,12 +1,11 @@
 #include "sdlwrap.hpp"
 #include <stdio.h>
-#include <fstream>
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
 #else
 #endif
 
-namespace sdlwrap {
+namespace sdlw{
     template<typename ... Args>
     static void __error(const char* s, int l, const char* f, Args const & ... args){
         printf("%s:%d: error: ", s, l);
@@ -61,6 +60,7 @@ namespace sdlwrap {
     }
 
     
+    #define DEFAULT_TTF_PATH "asset/font/ttf/D2Coding-Ver1.3-20171129.ttf"
     template<int size>
     TTF_Font*& Font::get(){
         static TTF_Font* font = TTF_OpenFont((std::string(FileManager::getBasePath()) + DEFAULT_TTF_PATH).c_str(), size);
@@ -74,25 +74,24 @@ namespace sdlwrap {
         return font;
     }
 
-    Texture::Texture(SDL_Renderer* renderer, Align align_v, Align align_h): renderer(renderer), align_v(align_v), align_h(align_h) { }
-    Texture::Texture(SDL_Renderer* renderer, const char* path, Align align_v, Align align_h): renderer(renderer), align_v(align_v), align_h(align_h) {
-        load(std::move(path));
+    Texture::Texture(SDL_Renderer* renderer, const char* path) {
+        load(renderer, path);
     }
-    Texture::Texture(SDL_Renderer* renderer, const char* text, TTF_Font* font, SDL_Color textColor, Align align_v, Align align_h): renderer(renderer), align_v(align_v), align_h(align_h) {
-        load(std::move(text), std::move(font), std::move(textColor));
+    Texture::Texture(SDL_Renderer* renderer, const char* text, TTF_Font* font, SDL_Color textColor) {
+        load(renderer, text, font, textColor);
     }
-    void Texture::load(const char* path){
+    void Texture::load(SDL_Renderer* renderer, const char* path){
         if(texture) free();
         SDL_Surface* loadedSurface = IMG_Load(path);
         if(loadedSurface == NULL) error("%s with '%s'", IMG_GetError(), path);
-        SDL_SetColorKey(loadedSurface, SDL_TRUE, SDL_MapRGB(loadedSurface->format, 0, 0xFF, 0xFF));
+        //SDL_SetColorKey(loadedSurface, SDL_TRUE, SDL_MapRGB(loadedSurface->format, 0, 0xFF, 0xFF));
         texture = SDL_CreateTextureFromSurface(renderer, loadedSurface);
         if(texture == NULL) error("%s with '%s'", SDL_GetError(), path);
         w = loadedSurface->w;
         h = loadedSurface->h;
         SDL_FreeSurface( loadedSurface );
     }
-    void Texture::load(const char* text, TTF_Font* font, SDL_Color textColor){
+    void Texture::load(SDL_Renderer* renderer, const char* text, TTF_Font* font, SDL_Color textColor){
         if(texture) free();
         SDL_Surface* loadedSurface = TTF_RenderUTF8_Blended(font, text, textColor);
         if(loadedSurface == NULL) error("%s with '%s'", TTF_GetError(), text);
@@ -103,17 +102,73 @@ namespace sdlwrap {
         SDL_FreeSurface(loadedSurface);
     }
     void Texture::free(){ SDL_DestroyTexture(texture); }
-    Texture::~Texture(){ if(texture) free(); }
+    Texture::~Texture(){ 
+        if(texture) free(); 
+    }
+    /*
     Texture& Texture::operator=(const Texture& fellow)
     {
         if(texture) SDL_DestroyTexture(texture);
-        // avoid changing the name of the object
         return *this;
     }
+    */
     //void setColor( Uint8 red, Uint8 green, Uint8 blue ){}
     //void setBlendMode( SDL_BlendMode blending ){}
     //void setAlpha( Uint8 alpha ){}
     //void render( int x, int y, SDL_Rect* clip = NULL, double angle = 0.0, SDL_Point* center = NULL, SDL_RendererFlip flip = SDL_FLIP_NONE ){}
+
+    SpriteSheet::SpriteSheet(SDL_Renderer* renderer, const char* atlas_info_csv) {
+        load(renderer, atlas_info_csv);
+    } 
+    int SpriteSheet::load(SDL_Renderer* renderer, const char* atlas_info_csv){
+        int field_num = 11;
+        char *saveptr=NULL;
+        char *atlas_name=NULL, *sprite_name=NULL;
+        bool rotated;
+        SDL_Rect source_rect;
+        FILE* f = fopen(atlas_info_csv, "r");
+        if(f == NULL){
+            error("can not open file '%s'",atlas_info_csv);
+            return -1;
+        }
+        fseek(f, 0, SEEK_END);
+        int l = ftell(f);
+        rewind(f);
+        char* str = new char[l];
+        if(l != fread(str, 1, l, f)){
+            error("error while reading '%s'", atlas_info_csv);
+            return -1;
+        }
+        fclose(f);
+        strtok_r(str, ", \n", &saveptr);
+        --field_num;
+        while(true){
+            for(;field_num; --field_num) strtok_r(NULL, ", \n", &saveptr);
+            if(!(atlas_name = strtok_r(NULL, ", \n", &saveptr))) break;
+            if(path2atlas.find(atlas_name) == path2atlas.end())
+                path2atlas.insert({atlas_name, new Texture(renderer, atlas_name)});
+            //if(path2atlas.find(std::string(atlas_name)) == path2atlas.end())
+            //    atlas_texture = &path2atlas.insert({std::string(atlas_name), Texture(renderer, atlas_name)}).first->second;
+            //atlas_texture = &path2atlas.at(std::string(atlas_name));
+            for(int i=4;i;--i) strtok_r(NULL, ", \n", &saveptr);
+            sprite_name = strtok_r(NULL, ", \n", &saveptr);
+            rotated = atoi(strtok_r(NULL, ", \n", &saveptr));
+            source_rect.w = atoi(strtok_r(NULL, ", \n", &saveptr));
+            source_rect.h = atoi(strtok_r(NULL, ", \n", &saveptr)); 
+            source_rect.x = atoi(strtok_r(NULL, ", \n", &saveptr));
+            source_rect.y = atoi(strtok_r(NULL, ", \n", &saveptr)); 
+            if(path2sprite.find(atlas_name) == path2sprite.end())
+                path2sprite.insert({sprite_name, new Sprite(path2atlas.at(atlas_name), source_rect, rotated)});
+            else
+                error("there are duplicated sprites: '%s'", sprite_name);
+        }
+        if(sprite_name == NULL || sprite_name[0] == '\0'){
+            error("error while loading atlas at '%s'", atlas_info_csv);
+            return -1;
+        }
+        delete[] str;
+        return 0;
+    }
 
     void Window::initSDL() {
         // it will be initialized when first window created
@@ -123,8 +178,7 @@ namespace sdlwrap {
             not_yet = false;
             if(SDL_Init(SDL_INIT_VIDEO) < 0) error("fail while init SDL: %s", SDL_GetError());
             if(TTF_Init() < 0) error("fail while init TTF: %s", TTF_GetError());
-            //if(IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) error("%s", IMG_GetError());
-            //printf("%s\n", "SDL_INITED");
+            if(IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) error("%s", IMG_GetError());
         }
     }
     void Window::render(){
@@ -133,19 +187,23 @@ namespace sdlwrap {
         if(current_scene) current_scene->render();
         SDL_RenderPresent(renderer);
     }
+    Window::Window(MainLoop* mainloop, const char* title, int w, int h): Window(title, w, h) {
+        mainloop->add(this);
+    }
     Window::Window(const char* title, int w, int h): Window(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w, h) {
+    }
+    Window::Window(MainLoop* mainloop, const char* title, int x, int y, int w, int h, uint32_t flags): Window(title, x, y, w, h, flags) {
+        mainloop->add(this);
     }
     Window::Window(const char* title, int x, int y, int w, int h, uint32_t flags): width(w), height(h){
         initSDL();
         if(!(window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags))) error("fail while gen window '%s': %s", title, SDL_GetError());
         if(!(renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED))) error("error while gen renderer of window of '%s': %s", title, SDL_GetError());
         if(SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND) < 0) error("error while set render draw blend mode with window of '%s'", title, SDL_GetError());
-        container.push_back(this);
     }
     Window::~Window(){
         SDL_DestroyWindow(window);
         SDL_DestroyRenderer(renderer);
-        for(auto it = container.begin(); it != container.end(); ++it) if(*it == this){ container.erase(it); break; }
     }
     void Window::set(Scene* scene){ 
         current_scene = scene; 
@@ -178,19 +236,18 @@ namespace sdlwrap {
         if(current_scene) current_scene->handleKeyUp(e);
     }
     SDL_Renderer* Window::getRenderer(){ return renderer; }
-    std::vector<Window*> Window::container;
 
-    Component::Component(Scene* scene): renderer(scene->window->getRenderer()){
-       //scene.add(this);
+    Component::Component(Scene* scene): renderer(scene->getRenderer()){
+        scene->add(this);
     }
     SDL_Renderer* Component::getRenderer(){ return renderer; }
 
     void Scene::render(){ 
         for(auto& c: components) c->render();
     }
-    Scene::Scene(Window& w){
-        window = &w; 
-        if(!w.current_scene) window->set(this);
+    Scene::Scene(Window* w){
+        window = w; 
+        if(!window->getCurrentScene()) window->set(this);
     }
     bool Scene::operator==(const Scene& rhs) const {
         return (this==&rhs);
@@ -199,8 +256,37 @@ namespace sdlwrap {
         window->set(this); 
     }
     void Scene::switchTo(Scene* other){ other->show(); }
+    void Scene::handleMouseMotion(const SDL_MouseButtonEvent& e){
+        if(mouseMotionHandler) mouseMotionHandler(e);
+        for(auto& c: components)
+            c->handleMouseMotion(e);
+    }
+    void Scene::handleMouseButtonDown(const SDL_MouseButtonEvent& e){
+        if(mouseButtonDownHandler) mouseButtonDownHandler(e);
+        for(auto& c: components)
+            c->handleMouseButtonDown(e);
+    }
+    void Scene::handleMouseButtonUp(const SDL_MouseButtonEvent& e){
+        if(mouseButtonUpHandler) mouseButtonUpHandler(e);
+        for(auto& c: components)
+            c->handleMouseButtonUp(e);
+    }
+    void Scene::handleTextInput(const SDL_TextInputEvent& e){
+        if(textInputHandler) textInputHandler(e);
+        for(auto& c: components)
+            c->handleTextInput(e);
+    }
+    void Scene::handleKeyDown(const SDL_KeyboardEvent& e){
+        if(keyDownHandler) keyDownHandler(e);
+        for(auto& c: components)
+            c->handleKeyDown(e);
+    }
+    void Scene::handleKeyUp(const SDL_KeyboardEvent& e){
+        if(keyUpHandler) keyUpHandler(e);
+        for(auto& c: components)
+            c->handleKeyUp(e);
+    }
     void Scene::add(Component* g){ components.push_back(g); }
-
     template<class ComponentType, typename... Args>
     ComponentType* Scene::add(Args... args){
         ComponentType* c = new ComponentType(this, args...);
@@ -218,7 +304,7 @@ namespace sdlwrap {
     //Component& add(Component& component){ components.push_back(&component); return component; }
     //friend void Window::render();
 
-    Text::Text(Scene* scene, int x, int y, const char* str, TTF_Font* _font, SDL_Color _color, Align align_v, Align align_h): Component(scene), texture(renderer, align_v, align_h), align_v(align_v), align_h(align_h) {
+    Text::Text(Scene* scene, int x, int y, const char* str, TTF_Font* _font, SDL_Color _color, Align align_v, Align align_h): Component(scene), align_v(align_v), align_h(align_h) {
         set(str, _font, _color); 
         set(x, y);
     }
@@ -233,7 +319,7 @@ namespace sdlwrap {
     void Text::set(const char* str){ 
         if(str && str[0] != '\0'){
             text = std::string(str); 
-            texture.load(text.c_str(), font, color);
+            texture.load(renderer, text.c_str(), font, color);
             rect.w = texture.getWidth(); 
             rect.h = texture.getHeight();
         }
@@ -243,7 +329,7 @@ namespace sdlwrap {
         }
     }
     void Text::render(){
-        texture.render(rect);
+        texture.render(renderer, rect);
     }
 
     Input::Input(Scene* scene, int x, int y, int w, TTF_Font* _font, SDL_Color _color, Align align_v, Align align_h, char overlap): Text::Text(scene, x, y, NULL, _font, _color, align_v, Align::LEFT), bg_align_h(align_h), overlap(overlap) {
@@ -358,7 +444,7 @@ namespace sdlwrap {
             SDL_RenderFillRect(renderer, &cursor_rect);
         //SDL_RenderFillRect(renderer, &bg_rect);
         SDL_RenderFillRect(renderer, &underbar_rect);
-        texture.render(rect);
+        texture.render(renderer, rect);
     }
     Input* Input::focused = NULL;
 
@@ -402,76 +488,74 @@ namespace sdlwrap {
         SDL_RenderFillRect(renderer, &bg_rect);
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         SDL_RenderDrawRect(renderer, &bg_rect);
-        texture.render(rect);
+        texture.render(renderer, rect);
     }
 
     void MainLoop::run(int fps){
         SDL_StartTextInput();
-        auto loop_func = [](void* args){ 
-            static SDL_Event e;
-            static SDL_MouseButtonEvent fake_mve; 
-            static Uint32 last_time = SDL_GetTicks();
-            while(SDL_PollEvent(&e)) {
-                switch(e.type){
+        auto loop_func = [](void* args){
+            MainLoop* _this = reinterpret_cast<MainLoop*>(args);
+            while(SDL_PollEvent(&_this->e)) {
+                switch(_this->e.type){
                 case SDL_QUIT: 
-                    MainLoop::stop();
+                    _this->MainLoop::stop();
                     break;
                 case SDL_MOUSEMOTION:
-                    for(Window*& w : Window::container) w->handleMouseMotion(e.button); 
+                    for(Window*& w : _this->windows) w->handleMouseMotion(_this->e.button); 
                     break;
                 case SDL_MOUSEBUTTONDOWN:
-                    for(Window*& w : Window::container) w->handleMouseButtonDown(e.button); 
+                    for(Window*& w : _this->windows) w->handleMouseButtonDown(_this->e.button); 
                     break;
                 case SDL_MOUSEBUTTONUP:
-                    for(Window*& w : Window::container) w->handleMouseButtonUp(e.button); 
+                    for(Window*& w : _this->windows) w->handleMouseButtonUp(_this->e.button); 
                     break;
                 case SDL_KEYDOWN:
-                    for(Window*& w : Window::container) w->handleKeyDown(e.key); 
+                    for(Window*& w : _this->windows) w->handleKeyDown(_this->e.key); 
                     break;
                 case SDL_KEYUP:
-                    for(Window*& w : Window::container) w->handleKeyUp(e.key); 
+                    for(Window*& w : _this->windows) w->handleKeyUp(_this->e.key); 
                     break;
                 case SDL_TEXTINPUT:
-                    for(Window*& w : Window::container) w->handleTextInput(e.text); 
+                    for(Window*& w : _this->windows) w->handleTextInput(_this->e.text); 
                     break;
                 case SDL_TEXTEDITING:
-                    printf("%s\n", e.edit.text);
+                    printf("%s\n", _this->e.edit.text);
                     break;
                 case SDL_FINGERDOWN:
-                    for(Window*& w : Window::container){ 
-                        fake_mve.x = e.tfinger.x * w->getWidth();
-                        fake_mve.y = e.tfinger.y * w->getHeight();
-                        w->handleMouseButtonDown(fake_mve); 
+                    for(Window*& w : _this->windows){ 
+                        _this->fake_mve.x = _this->e.tfinger.x * w->getWidth();
+                        _this->fake_mve.y = _this->e.tfinger.y * w->getHeight();
+                        w->handleMouseButtonDown(_this->fake_mve); 
                     }
                     break;
                 case SDL_FINGERUP:
-                    for(Window*& w : Window::container){ 
-                        fake_mve.x = e.tfinger.x * w->getWidth();
-                        fake_mve.y = e.tfinger.y * w->getHeight();
-                        w->handleMouseButtonUp(fake_mve); 
+                    for(Window*& w : _this->windows){ 
+                        _this->fake_mve.x = _this->e.tfinger.x * w->getWidth();
+                        _this->fake_mve.y = _this->e.tfinger.y * w->getHeight();
+                        w->handleMouseButtonUp(_this->fake_mve); 
                     }
                     break;
                 case SDL_FINGERMOTION:
-                    SDL_MouseButtonEvent _e;
-                    for(Window*& w : Window::container){ 
-                        _e.x = e.tfinger.x * w->getWidth();
-                        _e.y = e.tfinger.y * w->getHeight();
-                        w->handleMouseMotion(_e); 
+                    for(Window*& w : _this->windows){ 
+                        _this->fake_mve.x = _this->e.tfinger.x * w->getWidth();
+                        _this->fake_mve.y = _this->e.tfinger.y * w->getHeight();
+                        w->handleMouseMotion(_this->fake_mve); 
                     }
                     break;
                 }
             }
-            while(SDL_GetTicks() - last_time >= 1000/60){
-                for(Window*& w : Window::container) w->render(); 
-                last_time += 1000/60;
+            while(SDL_GetTicks() - _this->last_time >= 1000/60){
+                for(Window*& w : _this->windows) w->render(); 
+                _this->last_time += 1000/60;
             }
         };
+        last_time = SDL_GetTicks();
 #ifdef __EMSCRIPTEN__
-        emscripten_set_main_loop_arg(loop_func, NULL, fps, true);
+        emscripten_set_main_loop_arg(loop_func, this, fps, true);
 #else
         uint32_t last_time = SDL_GetTicks(); 
         while(looping){
-            loop_func(NULL);
+            loop_func(this);
             if(SDL_GetTicks() - last_time < 1000/fps)
                 SDL_Delay(1000/fps - SDL_GetTicks() + last_time);
         }
@@ -484,6 +568,7 @@ namespace sdlwrap {
         looping = false;
 #endif
     }
-    bool MainLoop::looping = true;
-
+    void MainLoop::add(Window* window){
+        windows.push_back(window);
+    }
 }

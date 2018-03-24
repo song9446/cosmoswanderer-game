@@ -1,1 +1,1 @@
-cd build/web && python -m SimpleHTTPServer 8000
+sudo h2o -m daemon -c h2o.conf

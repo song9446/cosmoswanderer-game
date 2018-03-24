@@ -2,9 +2,12 @@
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+#include <cstring>
+#include <string>
 #include <vector>
-#include <fstream>
-namespace sdlwrap{
+#include <map>
+#include <math.h>
+namespace sdlw{
 enum class Align {
     CENTER, LEFT, RIGHT, TOP, MIDDLE, BOTTOM
 };
@@ -20,7 +23,7 @@ struct FileManager {
 };
 
 struct Font{
-    static constexpr const char* DEFAULT_TTF_PATH = "asset/font/ttf/D2Coding-Ver1.3-20171129.ttf";
+    //static const char* DEFAULT_TTF_PATH;
     template<char... path, int size>
     static TTF_Font*& get();
     template<int size>
@@ -41,38 +44,42 @@ static inline iscollision(const SDL_Rect r1, const SDL_Rect r2){
 }
 */
 
-
 class Texture{
     SDL_Texture* texture = NULL;
-    SDL_Rect rect;
-    SDL_Renderer* renderer = NULL;
-    Align align_v, align_h;
     int w, h;
 public:
-    Texture(SDL_Renderer* renderer, Align _align_v=Align::TOP, Align _align_h=Align::LEFT);
-    Texture(SDL_Renderer* renderer, const char* path, Align _align_v=Align::TOP, Align _align_h=Align::LEFT);
-    Texture(SDL_Renderer* renderer, const char* text, TTF_Font* font, SDL_Color textColor = SDL_Color{255,255,255,255}, Align _align_v=Align::TOP, Align _align_h=Align::LEFT);
-    void load(const char* path);
-    void load(const char* text, TTF_Font* font, SDL_Color textColor = SDL_Color{255,255,255, 255});
+    Texture(){}
+    Texture(SDL_Renderer* renderer, Texture* other);
+    Texture(SDL_Renderer* renderer, const char* path);
+    Texture(SDL_Renderer* renderer, const char* text, TTF_Font* font, SDL_Color textColor = SDL_Color{255,255,255,255});
+    void load(SDL_Renderer* renderer, const char* path);
+    void load(SDL_Renderer* renderer, const char* text, TTF_Font* font, SDL_Color textColor = SDL_Color{255,255,255, 255});
     void free();
     ~Texture();
-    Texture& operator=(const Texture& fellow);
+    //Texture& operator=(const Texture& fellow);
     //void setColor( Uint8 red, Uint8 green, Uint8 blue ){}
     //void setBlendMode( SDL_BlendMode blending ){}
     //void setAlpha( Uint8 alpha ){}
     //void render( int x, int y, SDL_Rect* clip = NULL, double angle = 0.0, SDL_Point* center = NULL, SDL_RendererFlip flip = SDL_FLIP_NONE ){}
-    inline void render(const SDL_Rect& rect){
-        SDL_RenderCopy(renderer, texture, NULL, &rect);
+    inline void render(SDL_Renderer* renderer, const SDL_Rect& dest_rect){
+        SDL_RenderCopy(renderer, texture, NULL, &dest_rect);
     }
-    inline void render(int x, int y){ 
-        rect.x = x - (align_h==Align::CENTER)*w/2 - (align_h==Align::RIGHT)*w; 
-        rect.y = y - (align_v==Align::MIDDLE)*h/2 - (align_v==Align::BOTTOM)*h; 
-        rect.w = w; rect.h = h;
-        SDL_RenderCopy(renderer, texture, NULL, &rect); 
+    inline void render(SDL_Renderer* renderer, const SDL_Rect& source_rect, const SDL_Rect& dest_rect, const double angle, const SDL_Point& pivot, const SDL_RendererFlip flip = SDL_FLIP_NONE){
+        SDL_RenderCopyEx(renderer, texture, &source_rect, &dest_rect, angle, &pivot, flip);
+    }
+    inline void render(SDL_Renderer* renderer, const SDL_Rect& source_rect, const SDL_Rect& dest_rect, SDL_RendererFlip flip = SDL_FLIP_NONE){
+        SDL_RenderCopyEx(renderer, texture, &source_rect, &dest_rect, 0. , NULL, flip);
+    }
+    inline void render(SDL_Renderer* renderer, int x, int y, Align align_v = Align::TOP, Align align_h = Align::LEFT){ 
+        SDL_Rect dest_rect{x, y, w, h};
+        dest_rect.x = x - (align_h==Align::CENTER)*dest_rect.w/2 - (align_h==Align::RIGHT)*(dest_rect.w); 
+        dest_rect.y = y - (align_v==Align::MIDDLE)*dest_rect.h/2 - (align_v==Align::BOTTOM)*(dest_rect.h); 
+        SDL_RenderCopy(renderer, texture, NULL, &dest_rect); 
     }
     int getWidth(){return w;};
     int getHeight(){return h;};
 };
+
 
 class EventHandlerInterface { 
     typedef std::function<void (const SDL_MouseButtonEvent&)> SDLMouseButtonEventHandler;
@@ -101,18 +108,21 @@ public:
 };
 
 class Scene;
+class MainLoop;
 class Window: public EventHandlerInterface {
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     Scene* current_scene = NULL;
     int width, height;
     static void initSDL(); 
-    static std::vector<Window*> container;
     void render();
 public:
     Window(const char* title, int w, int h);
     Window(const char* title, int x, int y, int w, int h, uint32_t flags=SDL_WINDOW_SHOWN);
+    Window(MainLoop* mainloop, const char* title, int w, int h);
+    Window(MainLoop* mainloop, const char* title, int x, int y, int w, int h, uint32_t flags=SDL_WINDOW_SHOWN);
     ~Window();
+    Scene* getCurrentScene(){ return current_scene; }
     void set(Scene* scene); 
     void set(Scene& scene); 
     int getWidth(){ return width; }
@@ -125,7 +135,34 @@ public:
     virtual void handleKeyDown(const SDL_KeyboardEvent& e);
     virtual void handleKeyUp(const SDL_KeyboardEvent& e);
     friend class MainLoop;
-    friend class Scene;
+    //friend class Scene;
+};
+
+class Component;
+class Scene: public EventHandlerInterface {
+    typedef const std::function<void (char*, int)> Collable;
+    Window* window;
+    std::vector<Component*> components;
+    void render();
+public:
+    Scene(Window* w);
+    ~Scene();
+    SDL_Renderer* getRenderer(){
+        return window->getRenderer();
+    };
+    void show();
+    void switchTo(Scene* other);
+    virtual void handleMouseMotion(const SDL_MouseButtonEvent& e);
+    virtual void handleMouseButtonDown(const SDL_MouseButtonEvent& e);
+    virtual void handleMouseButtonUp(const SDL_MouseButtonEvent& e);
+    virtual void handleTextInput(const SDL_TextInputEvent& e);
+    virtual void handleKeyDown(const SDL_KeyboardEvent& e);
+    virtual void handleKeyUp(const SDL_KeyboardEvent& e);
+    void add(Component* c);
+    template<class ComponentType, typename... Args>
+    ComponentType* add(Args... args);
+    bool operator==(const Scene& rhs) const;
+    friend class Window;
 };
 
 class Component: public EventHandlerInterface {
@@ -162,54 +199,94 @@ public:
     }
 };
 
-class Scene: public EventHandlerInterface {
-    typedef const std::function<void (char*, int)> Collable;
-    Window* window;
-    std::vector<Component*> components;
-    void render();
+class Sprite {
+    Texture* texture;
+    SDL_Rect source_rect;
+    bool rotated;
 public:
-    Scene(Window& w);
-    ~Scene();
-    void show();
-    void switchTo(Scene* other);
-    virtual void handleMouseMotion(const SDL_MouseButtonEvent& e){
-        if(mouseMotionHandler) mouseMotionHandler(e);
-        for(auto& c: components)
-            c->handleMouseMotion(e);
+    Sprite(Sprite* sprite) {
+        texture = sprite->texture;
+        source_rect = sprite->source_rect;
+        rotated = sprite->rotated;
     }
-    virtual void handleMouseButtonDown(const SDL_MouseButtonEvent& e){
-        if(mouseButtonDownHandler) mouseButtonDownHandler(e);
-        for(auto& c: components)
-            c->handleMouseButtonDown(e);
+    Sprite(Texture* texture, SDL_Rect source_rect, bool rotated): texture(texture), source_rect(source_rect), rotated(rotated) {}
+    inline void render(SDL_Renderer* renderer, const SDL_Rect& dest_rect){
+        texture->render(renderer, source_rect, dest_rect);
     }
-    virtual void handleMouseButtonUp(const SDL_MouseButtonEvent& e){
-        if(mouseButtonUpHandler) mouseButtonUpHandler(e);
-        for(auto& c: components)
-            c->handleMouseButtonUp(e);
+    inline void render(SDL_Renderer* renderer, int x, int y, Align align_v = Align::TOP, Align align_h = Align::LEFT){ 
+        SDL_Rect dest_rect = {x, y, source_rect.w, source_rect.h};
+        SDL_Point pivot = {source_rect.w/2, source_rect.w/2};
+        dest_rect.x = x - (align_h==Align::CENTER)*dest_rect.h/2 - (align_h==Align::RIGHT)*(dest_rect.h); 
+        dest_rect.y = y - (align_v==Align::MIDDLE)*dest_rect.w/2 - (align_v==Align::BOTTOM)*(dest_rect.w); 
+        texture->render(renderer, source_rect, dest_rect, -(rotated? 90.:0), pivot, SDL_FLIP_NONE);
     }
-    virtual void handleTextInput(const SDL_TextInputEvent& e){
-        if(textInputHandler) textInputHandler(e);
-        for(auto& c: components)
-            c->handleTextInput(e);
+    inline void render(SDL_Renderer* renderer, int x, int y, const double angle_, const SDL_Point& p, SDL_RendererFlip flip = SDL_FLIP_NONE, Align align_v=Align::TOP, Align align_h=Align::LEFT){
+        render(renderer, x, y, angle_, &p, flip, align_v, align_h);
     }
-    virtual void handleKeyDown(const SDL_KeyboardEvent& e){
-        if(keyDownHandler) keyDownHandler(e);
-        for(auto& c: components)
-            c->handleKeyDown(e);
+    inline void render(SDL_Renderer* renderer, int x, int y, const double angle_, const SDL_Point* _p, SDL_RendererFlip flip = SDL_FLIP_NONE, Align align_v=Align::TOP, Align align_h=Align::LEFT){
+        float rad = 3.14159268357/180*angle_, 
+              cosa = cos(-rad), sina = sin(-rad);
+        SDL_Point t = {source_rect.w/2, source_rect.w/2},
+                  p = _p==NULL? SDL_Point{source_rect.w/2, source_rect.h/2} : *_p;
+        SDL_Rect dest_rect = {x, y, source_rect.w, source_rect.h};
+        dest_rect.x = x - (align_h==Align::CENTER)*dest_rect.h/2 - (align_h==Align::RIGHT)*(dest_rect.h) - (p.x + cosa*(-p.x+t.x+t.y) + sina*(p.y+t.x-t.y)); 
+        dest_rect.y = y - (align_v==Align::MIDDLE)*dest_rect.w/2 - (align_v==Align::BOTTOM)*(dest_rect.w) - (p.y - cosa*(-p.y-t.x+t.y) + sina*(-p.x+t.x+t.y)); 
+        texture->render(renderer, source_rect, dest_rect, angle_ - (rotated? 90.:0), {0,0}, flip);
     }
-    virtual void handleKeyUp(const SDL_KeyboardEvent& e){
-        if(keyUpHandler) keyUpHandler(e);
-        for(auto& c: components)
-            c->handleKeyUp(e);
-    }
-    void add(Component* c);
-    template<class ComponentType, typename... Args>
-    ComponentType* add(Args... args);
+};
 
-    bool operator==(const Scene& rhs) const;
+/*
+class AnimatedSprite {
+    Sprite* sprites;
+    uint32_t loop_num;
+    uint32_t last_update_time;
+    float speedfactor=1.0;
+    AnimatedSprite(){
+        sprites = NULL;
+    }
+    animate(){
+    }
+};
+*/
 
-    friend class Window;
-    friend Component::Component(Scene*);
+class SpriteSheet {
+    std::map<std::string, Texture*> path2atlas;
+    std::map<std::string, Sprite*> path2sprite;
+public:
+    SpriteSheet(SDL_Renderer* renderer, const char* atlas_info_csv); 
+    int load(SDL_Renderer* renderer, const char* atlas_info_csv);
+    Sprite* get(const char* path){
+        return path2sprite.at(std::string(path));
+    }
+};
+
+class Image: public Component {
+    Texture texture;
+    int x, y;
+public:
+    Image(Scene* scene, const char* path, int x, int y): Component(scene), texture(renderer, path), x(x), y(y) {
+    }
+    void render(){
+        texture.render(renderer, x ,y);
+    }
+};
+class SpriteImage: public Component {
+    Sprite sprite;
+    int x, y;
+    double angle;
+    SDL_Point* pivot;
+    Align align_v, align_h;
+public:
+    SpriteImage(Scene* scene, Sprite* sprite, int x, int y, Align align_v=Align::TOP, Align align_h=Align::LEFT): Component(scene), sprite(sprite), x(x), y(y), align_v(align_v), align_h(align_h){
+    }
+    SpriteImage(Scene* scene, Sprite* sprite, int x, int y, double angle, SDL_Point* pivot, Align align_v=Align::TOP, Align align_h=Align::LEFT): Component(scene), sprite(sprite), x(x), y(y), angle(angle), pivot(pivot? new SDL_Point{pivot->x, pivot->y} : NULL), align_v(align_v), align_h(align_h) {
+    }
+    ~SpriteImage(){
+        delete pivot;
+    }
+    void render(){
+        sprite.render(renderer, x, y, angle, pivot, SDL_FLIP_NONE, align_v, align_h);
+    }
 };
 
 class Text: public Component {
@@ -266,9 +343,16 @@ public:
 };
 
 class MainLoop {
-    static bool looping;
+#ifndef __EMSCRIPTEN__
+    bool looping = true;
+#endif
+    SDL_Event e;
+    SDL_MouseButtonEvent fake_mve; 
+    Uint32 last_time;
+    std::vector<Window*> windows;
 public:
-    static void run(int fps=-1);
-    static void stop();
+    void add(Window* window);
+    void run(int fps=-1);
+    void stop();
 };
 }

@@ -1,0 +1,22 @@
+starting new worker 29928
+[INFO] raised RLIMIT_NOFILE to 1048576
+h2o server (pid:29928) is ready to serve requests
+received TERM, sending TERM to all workers:29928
+worker 29928 died, status:0
+exiting
+starting new worker 29962
+[INFO] raised RLIMIT_NOFILE to 1048576
+h2o server (pid:29962) is ready to serve requests
+received TERM, sending TERM to all workers:29962
+worker 29962 died, status:0
+exiting
+starting new worker 30036
+[INFO] raised RLIMIT_NOFILE to 1048576
+h2o server (pid:30036) is ready to serve requests
+received TERM, sending TERM to all workers:30036
+received SIGTERM, gracefully shutting down
+worker 30036 died, status:0
+exiting
+starting new worker 12060
+[INFO] raised RLIMIT_NOFILE to 1048576
+h2o server (pid:12060) is ready to serve requests
